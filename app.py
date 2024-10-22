@@ -21,21 +21,28 @@ label_encoder.classes_ = np.load('label_encoder.npy', allow_pickle=True)
 def predict():
     data = request.json
 
-    # Extract features from request data
-    features = np.array([[data['danceability'], data['energy'], data['acousticness'], data['valence'], data['tempo']]])
+    # Extract features and trackIds from request data
+    features = np.array([[item['danceability'], item['energy'], item['acousticness'], item['valence'], item['tempo']] for item in data])
+    track_ids = [item['trackId'] for item in data]  # Extract trackIds
 
     # Normalize the features using the pre-fitted scaler
     normalized_features = scaler.transform(features)
 
     # Make predictions
-    prediction = model.predict(normalized_features)
-    predicted_class = np.argmax(prediction, axis=1)
-    predicted_label = label_encoder.inverse_transform([predicted_class])
+    predictions = model.predict(normalized_features)
+    predicted_classes = np.argmax(predictions, axis=1)
+    predicted_labels = label_encoder.inverse_transform(predicted_classes)
 
-    # Minimal output in the terminal
-    print(f"Predicted label: {predicted_label[0]}")
-    
-    return jsonify({'predicted_category': predicted_label[0]})
+    # Prepare the response with trackId and predicted category
+    response = []
+    for i, label in enumerate(predicted_labels):
+        response.append({
+            'trackId': track_ids[i],  # Include trackId
+            'predicted_category': label,
+        })
+
+    return jsonify(response)
+
 
 if __name__ == '__main__':
     app.run()
