@@ -3,15 +3,14 @@ import joblib
 from sklearn.preprocessing import MinMaxScaler, LabelEncoder
 from flask import Flask, request, jsonify
 import numpy as np
+import time
 
 app = Flask(__name__)
 
-# Suppress Flask's default logs
 import logging
 log = logging.getLogger('werkzeug')
 log.setLevel(logging.ERROR)
 
-# Load the model, scaler, and label encoder
 model = load_model('model.h5')
 scaler = joblib.load('scaler.joblib')
 label_encoder = LabelEncoder()
@@ -19,28 +18,34 @@ label_encoder.classes_ = np.load('label_encoder.npy', allow_pickle=True)
 
 @app.route('/predict', methods=['POST'])
 def predict():
+    start_time = time.time()  
+    
     data = request.json
 
-    # Extract features and trackIds from request data
     features = np.array([[item['danceability'], item['energy'], item['acousticness'], item['valence'], item['tempo']] for item in data])
-    track_ids = [item['trackId'] for item in data]  # Extract trackIds
+    tracks = [item['track'] for item in data] 
+    instrumentalness_values = np.array([item['instrumentalness'] for item in data])  
 
-    # Normalize the features using the pre-fitted scaler
     normalized_features = scaler.transform(features)
 
-    # Make predictions
     predictions = model.predict(normalized_features)
     predicted_classes = np.argmax(predictions, axis=1)
     predicted_labels = label_encoder.inverse_transform(predicted_classes)
 
-    # Prepare the response with trackId and predicted category
     response = []
-    for i, label in enumerate(predicted_labels):
+    for i in range(len(tracks)):
+        if instrumentalness_values[i] > 0.6:
+            category = "instrumental"
+        else:
+            category = predicted_labels[i]
+
+        tracks[i]['category'] = category
+
         response.append({
-            'trackId': track_ids[i],  # Include trackId
-            'predicted_category': label,
+            'track': tracks[i],
         })
 
+    print("Execution time: ", time.time() - start_time, "s")
     return jsonify(response)
 
 
